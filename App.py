@@ -76,7 +76,7 @@ for article in articles[:10]:  # Mostra apenas as 10 primeiras
     # Exibir notícia como um card simples
     st.markdown("---")
     if image_url:
-        st.image(image_url, use_container_width=True)  # Atualizado aqui
+        st.image(image_url, width='stretch')  # Atualizado aqui
     st.markdown(f"### {title}")
     st.markdown(f"*{byline}*")
     st.markdown(abstract)
