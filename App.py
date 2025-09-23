@@ -1,114 +1,83 @@
 import streamlit as st
 import requests
-import pandas as pd
+from datetime import datetime
 
-# Substitua pela sua chave da API do New York Times
-API_KEY = "T8K3C6h5cA8kbKkC21zXpxDI7yJpnV5d"
+# ==============================
+# Configurações da API
+# ==============================
+API_KEY = "T8K3C6h5cA8kbKkC21zXpxDI7yJpnV5d"  # Chave fixa no código
+BASE_URL = "https://api.nytimes.com/svc/topstories/v2"
 
-# Função para buscar artigos usando a API Search do NYT
-def search_articles(query, page=0):
-    """
-    Busca artigos no NYT usando a API Search.
-    Parâmetros:
-        query (str): termo de busca
-        page (int): página de resultados (0 a 100)
-    Retorna:
-        dict: resposta JSON da API ou None em caso de erro
-    """
-    url = "https://api.nytimes.com/svc/search/v2/articlesearch.json"
-    params = {
-        "q": query,
-        "api-key": API_KEY,
-        "page": page,
-        "sort": "relevance"
-    }
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        st.error(f"Erro ao acessar a API: {e}")
-        return None
+# ==============================
+# Logo e Cabeçalho
+# ==============================
+st.image(
+    "https://upload.wikimedia.org/wikipedia/commons/4/40/New_York_Times_logo_variation.jpg",
+    width=200
+)
 
-# Função para extrair dados relevantes dos artigos
-def parse_articles(data):
-    """
-    Extrai informações relevantes dos artigos retornados pela API.
-    Parâmetros:
-        data (dict): JSON retornado pela API
-    Retorna:
-        pd.DataFrame: DataFrame com colunas Título, Autor, Data, Resumo, URL
-    """
-    docs = data.get("response", {}).get("docs", [])
-    articles = []
-    for doc in docs:
-        headline = doc.get("headline", {}).get("main", "Sem título")
-        snippet = doc.get("snippet", "")
-        pub_date = doc.get("pub_date", "")[:10]  # formato YYYY-MM-DD
-        web_url = doc.get("web_url", "")
-        byline = doc.get("byline", {}).get("original", "Autor não informado")
-        articles.append({
-            "Título": headline,
-            "Resumo": snippet,
-            "Autor": byline,
-            "Data": pub_date,
-            "URL": web_url
-        })
-    return pd.DataFrame(articles)
+st.title("📰 Principais Notícias do New York Times")
 
-# Configurações da página Streamlit
-st.set_page_config(page_title="Busca NYT", layout="wide")
-
-# Título e descrição
-st.title("🔎 Busca de Artigos no New York Times")
 st.markdown("""
-Esta aplicação permite pesquisar artigos do New York Times por palavra-chave.
-Você pode navegar entre páginas de resultados e acessar os links das matérias originais.
+Esta aplicação consome a **API gratuita do New York Times** para exibir as principais histórias do dia.  
+A API fornece artigos jornalísticos em JSON, incluindo título, resumo, autor e imagens.
+
+**Seções disponíveis:** Home, Arts, Business, Politics, Sports, Technology.
+
+📌 Documentação oficial: [developer.nytimes.com](https://developer.nytimes.com/docs/top-stories-product/1/overview)
 """)
 
-# Input para termo de busca
-query = st.text_input("Digite o termo para pesquisa:", "")
+# ==============================
+# Seleção de Seção
+# ==============================
+sections = ["home", "arts", "business", "politics", "sports", "technology"]
+selected_section = st.selectbox("Escolha uma seção de notícias:", sections)
 
-# Controle de página para paginação
-if "page" not in st.session_state:
-    st.session_state.page = 0
+sections_descriptions = {
+    "home": "📰 Notícias gerais e destaques da atualidade.",
+    "arts": "🎭 Cobertura de artes, cultura e entretenimento.",
+    "business": "💼 Notícias sobre negócios, economia e mercado.",
+    "politics": "🏛️ Atualizações e análises do cenário político.",
+    "sports": "⚽ Notícias e resultados esportivos.",
+    "technology": "💻 Inovações e tendências do mundo tecnológico."
+}
 
-# Botões para navegação entre páginas
-def next_page():
-    st.session_state.page += 1
+st.markdown(f"**{sections_descriptions[selected_section]}**")
 
-def prev_page():
-    if st.session_state.page > 0:
-        st.session_state.page -= 1
+# ==============================
+# Função para pegar notícias
+# ==============================
+def get_news(section):
+    url = f"{BASE_URL}/{section}.json?api-key={API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        return data["results"]
+    else:
+        st.error("Erro ao acessar a API do NYTimes!")
+        return []
 
-# Quando o usuário digita um termo
-if query:
-    with st.spinner("Buscando artigos..."):
-        data = search_articles(query, st.session_state.page)
+# ==============================
+# Exibindo as notícias
+# ==============================
+articles = get_news(selected_section)
 
-    if data:
-        df = parse_articles(data)
-        if not df.empty:
-            st.markdown(f"### Resultados para: '{query}' (Página {st.session_state.page + 1})")
-            
-            # Mostrar artigos com links clicáveis
-            for idx, row in df.iterrows():
-                st.markdown(f"**{row['Título']}**")
-                st.markdown(f"*{row['Autor']}* - {row['Data']}")
-                st.markdown(f"{row['Resumo']}")
-                st.markdown(f"[Leia a matéria completa aqui]({row['URL']})")
-                st.markdown("---")
+for article in articles[:10]:  # Mostra apenas as 10 primeiras
+    title = article.get("title", "Sem título")
+    abstract = article.get("abstract", "")
+    byline = article.get("byline", "")
+    url = article.get("url", "")
+    image_url = ""
 
-            # Navegação entre páginas
-            col1, col2, col3 = st.columns([1,2,1])
-            with col1:
-                if st.session_state.page > 0:
-                    st.button("⬅️ Página Anterior", on_click=prev_page)
-            with col3:
-                # A API permite até 100 páginas (0 a 99)
-                if st.session_state.page < 99:
-                    st.button("Próxima Página ➡️", on_click=next_page)
-        else:
-            st.warning("Nenhum artigo encontrado para este termo.")
-else:
-    st.info("Digite um termo acima para iniciar a busca.")
+    # Pegar a primeira imagem se existir
+    if article.get("multimedia"):
+        image_url = article["multimedia"][0]["url"]
+
+    # Exibir notícia como um card simples
+    st.markdown("---")
+    if image_url:
+        st.image(image_url, use_container_width=True)  # Atualizado aqui
+    st.markdown(f"### {title}")
+    st.markdown(f"*{byline}*")
+    st.markdown(abstract)
+    st.markdown(f"[Leia mais]({url})")
